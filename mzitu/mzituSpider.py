@@ -146,7 +146,7 @@ def multiThread(imgTitlePath, imgUrls, threadNum):
         )
     for index, thread in enumerate(threads):
         thread.start()
-        time.sleep(0.06)
+        time.sleep(0.01)
         if index + 1 % threadNum == 0:
             time.sleep(threadNum * 0.25)
 
@@ -162,14 +162,15 @@ def saveImg(imgTitlePath, imgUrl, sema):
     :param sema: 用于控制线程数的锁 <class 'threading.BoundedSemaphore'>
     :return:
     '''
-    imgName = imgUrl.split('/')[-1]
     sema.acquire()
+    imgName = imgUrl.split('/')[-1]
     img = askUrl(imgUrl)
-    sema.release()
     if b"404 Not Found" not in img:
-        with open(imgTitlePath + imgName, "wb+") as file:
+        with open(imgTitlePath + imgName, "wb") as file:
+            time.sleep(0.03)
             file.write(img)
-            file.close()
+    sema.release()
+
 
 
 def getDownloadPageInfo(typeUrl):
@@ -211,7 +212,7 @@ def askUrl(url):
     :return: 网页内容 <class 'str'>
     '''
     header = {
-        "Referer": "https://www.mzitu.com",
+        "Referer": "https://www.mzitu.com/",
         "User-Agent": "Mozilla/5.0"
     }
     http = urllib3.ProxyManager("http://127.0.0.1:1080")
