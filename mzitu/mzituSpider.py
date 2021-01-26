@@ -11,11 +11,12 @@ import os
 import time
 import urllib3
 import threading
-from mzitu.CustomFunction import function
 
 
 def main():
     filePath = "D://User\\IMG\\"
+
+    threadNum = 10
 
     startUrl = "https://www.mzitu.com"
 
@@ -23,21 +24,10 @@ def main():
 
     downloadInfo = getDownloadPageInfo(typeUrl)
 
-    download(filePath, typeUrl, downloadInfo)
+    download(filePath, typeUrl, downloadInfo, threadNum)
 
 
-def download(filePath, typeUrl, downloadInfo):
-    # 解析下载类型并创建类型路径
-    typeDict = {
-        "xinggan": "性感", "mm": "清纯",
-        "japan": "日本", "taiwan": "台湾",
-        "hot": "最热", "best": "推荐"
-    }
-    fileType = typeDict[typeUrl[typeUrl.rfind("/") + 1:]]
-    fileTypePath = filePath + fileType + "\\"
-    if not os.path.exists(fileTypePath):
-        os.mkdir(fileTypePath)
-
+def download(filePath, typeUrl, downloadInfo, threadNum):
     # 构造页面链接
     basePageUrl = typeUrl + "/page/{page}"
     pageUrls = [
@@ -45,35 +35,66 @@ def download(filePath, typeUrl, downloadInfo):
         for page in range(1, downloadInfo[0] + 1)
     ]
 
-    # 请求链接页面得到图片相关信息
+    totalCounter = 0
+    downloadCounter = 0
+
     for pageUrl in pageUrls:
         resPage = askUrl(pageUrl).decode()
-
         # [(图片链接, 图片时间, 图片标题)]
         imgInfo = re.findall(r'<span><a href="(h.*?)".*?"_blank">(.*?)</a></span>.*?class="time">(.*?)</span>', resPage)
-
-        # 构造图片链接标题并创建标题路径
         for info in imgInfo:
+            totalCounter += 1
+            # 解析下载类型 构造标题 创建路径
+            typeDict = {
+                "xinggan": "\u6027\u611f", "mm": "\u6e05\u7eaf",
+                "japan": "\u65e5\u672c", "taiwan": "\u53f0\u6e7e",
+                "hot": "\u6700\u70ed", "best": "\u63a8\u8350"
+            }
+            fileType = typeDict[typeUrl[typeUrl.rfind("/") + 1:]]
             imgTitle = re.sub(r"/|\\|:|\*|\"|<|>|\?|\|", " ", info[1]).rstrip()
             imgTitle = info[2] + " " + imgTitle
-            imgTitlePath = fileTypePath + imgTitle + "\\"
+            imgTitlePath = filePath + fileType + "\\" + imgTitle + "\\"
             if not os.path.exists(imgTitlePath):
-                os.mkdir(imgTitlePath)
+                os.makedirs(imgTitlePath)
+                downloadCounter += 1
 
-                # 开始下载
-                print("\t正在下载: " + imgTitle)
-                downloadImg(info, imgTitlePath)
-                if function.counter() == downloadInfo[1]:
+                print("\t\u6b63\u5728\u4e0b\u8f7d: %d " % downloadCounter + imgTitle, end=" ")
+                imgUrls = getImgUrls(info)
+
+                downloadStar = time.time()
+                multiThread(imgTitlePath, imgUrls, threadNum)
+                downloadEnd = time.time()
+
+                print("耗时%ds" % (downloadEnd - downloadStar))
+
+                if not os.listdir(imgTitlePath):
+                    downloadCounter -= 1
+                    os.rmdir(imgTitlePath)
+
+                if downloadCounter == downloadInfo[2]:
+                    print(
+                        "%d\u5957\u5957\u56fe\u4e0b\u8f7d\u5b8c\u6bd5\u002c\u0020\u8bf7\u53bb\u4e0b%s\u67e5\u770b"
+                        % (downloadInfo[2], filePath)
+                    )
+                    return 1
+                elif totalCounter == downloadInfo[1]:
+                    print("\u4eca\u5929\u5c31\u5230\u8fd9\u91cc\u5427\u002c\u0020\u8001\u8272\u6279")
                     return 0
             else:
-                print("\t已下载过: " + imgTitle)
+                print("\t\u5df2\u4e0b\u8f7d\u8fc7: " + imgTitle)
+
+    if downloadCounter == 0:
+        print(
+            "\u771f\u7684\u4e00\u5f20\u4e5f\u6ca1\u6709\u4e86\u002c\u0020\u8001\u8272\u6279\u7b49\u7b49\u518d\u6765\u5427"
+        )
+    return None
 
 
-def downloadImg(info, imgTitlePath):
+def getImgUrls(info):
     # 获取图片数量和图片时间
-    resBaseImgPage = askUrl(info[0])
+    resBaseImgPage = askUrl(info[0]).decode()
     imgNum = re.findall(r'<span>(\d.*?)</span>', resBaseImgPage)[-1]
-    imgTime = re.sub(r'\D', "", info[1])
+    imgTime = re.sub(r'\D', "", info[2])
 
     # 获取图片连接池
     imgUrls = []
@@ -85,49 +106,57 @@ def downloadImg(info, imgTitlePath):
         ]
         imgUrls.extend(imgUrlsList)
     else:
+        print("这是远古套图, 正在获取图链...", end=" ")
         for num in range(1, int(imgNum) + 1):
             imgPageUrl = info[0] + "/" + num
             resImgPage = askUrl(imgPageUrl)
             imgUrl = re.findall(r'<img class="blur" src="(.*?)"', resImgPage)[0]
             imgUrls.append(imgUrl)
 
-    # 启动线程下载图片
-    # downloadMultiThread(imgUrls)
+    return imgUrls
 
 
-# def downloadMultiThread(imgUrls):
-#     threads = []
-#     for imgUrl in imgUrls:
-#         threads.append(
-#             threading.Thread(target=saveImg, args=(imgUrl,))
-#         )
-#     for thread in threads:
-#         thread.start()
-#
-#     for thread in threads:
-#         thread.join()
+def multiThread(imgTitlePath, imgUrls, threadNum):
+    threads = []
+    sema = threading.BoundedSemaphore(threadNum)
+    for imgUrl in imgUrls:
+        threads.append(
+            threading.Thread(target=saveImg, args=(imgTitlePath, imgUrl, sema,))
+        )
+    for index, thread in enumerate(threads):
+        thread.start()
+        time.sleep(0.06)
+        if index + 1 % threadNum == 0:
+            time.sleep(threadNum * 0.23)
 
-#
-# def saveImg(imgUrl):
-#     imgName = imgUrl.split('/')[-1]
-#     img = askUrl(imgUrl)
-#     if b"404 Not Found" not in img:
-#         with open(folderName + "\\" + imgTitle + "\\" + imgName, "wb+") as file:
-#             file.write(img)
-#             file.close()
+    for thread in threads:
+        thread.join()
+
+
+def saveImg(imgTitlePath, imgUrl, sema):
+    imgName = imgUrl.split('/')[-1]
+    sema.acquire()
+    img = askUrl(imgUrl)
+    sema.release()
+    if b"404 Not Found" not in img:
+        with open(imgTitlePath + imgName, "wb+") as file:
+            file.write(img)
+            file.close()
 
 
 def getDownloadPageInfo(typeUrl):
     '''
     得到用户需要下载的套图的数量数量信息
     :param typeUrl: 类型链接 <class 'str'>
-    :return: downloadInfo 下载信息列表=[页面总数, 下载套图数] <class 'list'> <class 'int'>
+    :return: downloadInfo 下载信息列表=[页面总数, 套图总数, 下载套图数] <class 'list'> <class 'int'>
     '''
     downloadInfo = []
 
     # 判断是否为推荐
     if "best" in typeUrl:
-        print("推荐套图仅有24套, 但每天可能不同")
+        print(
+            "\u63a8\u8350\u5957\u56fe\u6709\u0032\u0034\u5957\u002c\u0020\u4f46\u6bcf\u5929\u4e0d\u4e00\u6837\u002c\u0020\u4f1a\u5168\u90e8\u4e0b\u8f7d"
+        )
 
         downloadInfo.extend([1, 24])
         return downloadInfo
@@ -140,10 +169,10 @@ def getDownloadPageInfo(typeUrl):
     totalImgNum = len(re.findall(r'<span class="time">(.*?)</span>', resEndPage)) + int(pageTotalNum) * 24
 
     # 提示信息
-    print("请输入你想下载的套图数量(1-%s): " % totalImgNum, end="")
+    print("\u8bf7\u8f93\u5165\u4f60\u60f3\u4e0b\u8f7d\u7684\u5957\u56fe\u6570\u91cf(1-%d): " % totalImgNum, end="")
     num = inputIntCheck(totalImgNum)
 
-    downloadInfo.extend([int(pageTotalNum), num])
+    downloadInfo.extend([int(pageTotalNum), totalImgNum, num])
     return downloadInfo
 
 
@@ -157,7 +186,8 @@ def askUrl(url):
         "Referer": "https://www.mzitu.com",
         "User-Agent": "Mozilla/5.0"
     }
-    http = urllib3.PoolManager()
+    http = urllib3.ProxyManager("http://127.0.0.1:1080")
+    # http = urllib3.PoolManager()
     response = http.request('GET', url=url, headers=header).data
     return response
 
@@ -175,11 +205,11 @@ def getBaseUrl(startUrl):
         "hot", "best"]
 
     # 提示信息
-    print("分类列表: "
-          "\n\t1: 性感\t\t2: 清纯"
-          "\n\t3: 日本\t\t4: 台湾"
-          "\n\t5: 最热\t\t6: 推荐")
-    print("请输入你想下载的分类索引(1-6): ", end="")
+    print("\u5206\u7c7b\u5217\u8868: "
+          "\n\t1: \u6027\u611f\t\t2: \u6e05\u7eaf"
+          "\n\t3: \u65e5\u672c\t\t4: \u53f0\u6e7e"
+          "\n\t5: \u6700\u70ed\t\t6: \u63a8\u8350")
+    print("\u8bf7\u8f93\u5165\u4f60\u60f3\u4e0b\u8f7d\u7684\u5206\u7c7b\u7d22\u5f15(1-6): ", end="")
 
     num = inputIntCheck(len(menuItem))
 
