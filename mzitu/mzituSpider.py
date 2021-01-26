@@ -28,6 +28,14 @@ def main():
 
 
 def download(filePath, typeUrl, downloadInfo, threadNum):
+    '''
+    多线程下载图片并保存
+    :param filePath: 保存路径 <class 'str'>
+    :param typeUrl: 链接类型 <class 'str'>
+    :param downloadInfo: 下载信息列表 <class 'list'>
+    :param threadNum: 线程数量 <class 'int'>
+    :return: 1 0 None 达到预期下载量  未完全达到预期下载量  完全没有下载
+    '''
     # 构造页面链接
     basePageUrl = typeUrl + "/page/{page}"
     pageUrls = [
@@ -65,7 +73,7 @@ def download(filePath, typeUrl, downloadInfo, threadNum):
                 multiThread(imgTitlePath, imgUrls, threadNum)
                 downloadEnd = time.time()
 
-                print("耗时%ds" % (downloadEnd - downloadStar))
+                print("| 耗时%ds" % (downloadEnd - downloadStar))
 
                 if not os.listdir(imgTitlePath):
                     downloadCounter -= 1
@@ -73,7 +81,7 @@ def download(filePath, typeUrl, downloadInfo, threadNum):
 
                 if downloadCounter == downloadInfo[2]:
                     print(
-                        "%d\u5957\u5957\u56fe\u4e0b\u8f7d\u5b8c\u6bd5\u002c\u0020\u8bf7\u53bb\u4e0b%s\u67e5\u770b"
+                        "%d\u5957\u5957\u56fe\u4e0b\u8f7d\u5b8c\u6bd5\u002c\u0020\u8bf7\u53bb\u8def\u5f84: %s \u4e0b\u67e5\u770b"
                         % (downloadInfo[2], filePath)
                     )
                     return 1
@@ -91,6 +99,11 @@ def download(filePath, typeUrl, downloadInfo, threadNum):
 
 
 def getImgUrls(info):
+    '''
+    得到图片链接池
+    :param info: 图片信息列表 (图片链接, 图片时间, 图片标题) <class 'tuple'>
+    :return: 图片链接池 <class 'list'>
+    '''
     # 获取图片数量和图片时间
     resBaseImgPage = askUrl(info[0]).decode()
     imgNum = re.findall(r'<span>(\d.*?)</span>', resBaseImgPage)[-1]
@@ -98,6 +111,7 @@ def getImgUrls(info):
 
     # 获取图片连接池
     imgUrls = []
+    print("| 共计", end=" ")
     if int(imgTime) > 20140207:
         baseImgUrl = re.findall(r'<img class="blur" src="(.*?)"', resBaseImgPage)[0]
         imgUrlsList = [
@@ -105,18 +119,25 @@ def getImgUrls(info):
             for num in range(int(imgNum))
         ]
         imgUrls.extend(imgUrlsList)
+        print("%s张" % imgNum, end=" ")
     else:
-        print("这是远古套图, 正在获取图链...", end=" ")
         for num in range(1, int(imgNum) + 1):
             imgPageUrl = info[0] + "/" + num
             resImgPage = askUrl(imgPageUrl)
             imgUrl = re.findall(r'<img class="blur" src="(.*?)"', resImgPage)[0]
             imgUrls.append(imgUrl)
-
+        print("%s张" % imgNum, end=" ")
     return imgUrls
 
 
 def multiThread(imgTitlePath, imgUrls, threadNum):
+    '''
+    开启多线程进行下载
+    :param imgTitlePath: 图片保存路径 <class 'str'>
+    :param imgUrls: 图片链接池 <class 'list'>
+    :param threadNum: 线程数量 <class 'int'>
+    :return:
+    '''
     threads = []
     sema = threading.BoundedSemaphore(threadNum)
     for imgUrl in imgUrls:
@@ -127,13 +148,20 @@ def multiThread(imgTitlePath, imgUrls, threadNum):
         thread.start()
         time.sleep(0.06)
         if index + 1 % threadNum == 0:
-            time.sleep(threadNum * 0.23)
+            time.sleep(threadNum * 0.25)
 
     for thread in threads:
         thread.join()
 
 
 def saveImg(imgTitlePath, imgUrl, sema):
+    '''
+    保存图片
+    :param imgTitlePath: 图片保存路径 <class 'str'>
+    :param imgUrl: 图片链接 <class 'str'>
+    :param sema: 用于控制线程数的锁 <class 'threading.BoundedSemaphore'>
+    :return:
+    '''
     imgName = imgUrl.split('/')[-1]
     sema.acquire()
     img = askUrl(imgUrl)
@@ -158,7 +186,7 @@ def getDownloadPageInfo(typeUrl):
             "\u63a8\u8350\u5957\u56fe\u6709\u0032\u0034\u5957\u002c\u0020\u4f46\u6bcf\u5929\u4e0d\u4e00\u6837\u002c\u0020\u4f1a\u5168\u90e8\u4e0b\u8f7d"
         )
 
-        downloadInfo.extend([1, 24])
+        downloadInfo.extend([1, 24, 24])
         return downloadInfo
 
     # 获取套总数
