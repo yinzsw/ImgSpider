@@ -14,7 +14,7 @@ import threading
 
 
 def main():
-    filePath = "D://User\\IMG\\"  # 文件包存路径
+    filePath = "D://User\\IMG\\"  # 文件保存路径
 
     threadNum = 10  # 控制线程数,不宜过大,会封IP,不建议修改
 
