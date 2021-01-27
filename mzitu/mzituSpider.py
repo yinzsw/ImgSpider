@@ -16,7 +16,7 @@ import threading
 def main():
     filePath = "D://User\\IMG\\"  # 文件保存路径
 
-    threadNum = 10  # 控制线程数,不宜过大,会封IP,不建议修改
+    threadNum = 7  # 控制线程数,不宜过大, 不建议修改
 
     startUrl = "https://www.mzitu.com"
 
@@ -114,6 +114,8 @@ def getImgUrls(info):
     print("| 共计", end=" ")
     if int(imgTime) > 20140207:
         baseImgUrl = re.findall(r'<img class="blur" src="(.*?)"', resBaseImgPage)[0]
+        if "imgpc" in baseImgUrl:
+            baseImgUrl = re.sub("imgpc", "imgapp", baseImgUrl)
         imgUrlsList = [
             baseImgUrl[:-6] + "%02d" % (num + 1) + baseImgUrl[-4:]
             for num in range(int(imgNum))
@@ -125,8 +127,12 @@ def getImgUrls(info):
             imgPageUrl = info[0] + "/" + num
             resImgPage = askUrl(imgPageUrl)
             imgUrl = re.findall(r'<img class="blur" src="(.*?)"', resImgPage)[0]
+            if "imgpc" in imgUrl:
+                imgUrl = re.sub("imgpc", "imgapp", imgUrl)
             imgUrls.append(imgUrl)
         print("%s张" % imgNum, end=" ")
+    print(imgUrls)
+    exit()
     return imgUrls
 
 
@@ -146,9 +152,7 @@ def multiThread(imgTitlePath, imgUrls, threadNum):
         )
     for index, thread in enumerate(threads):
         thread.start()
-        time.sleep(0.01)
-        if index + 1 % threadNum == 0:
-            time.sleep(threadNum * 0.25)
+        time.sleep(0.05)
 
     for thread in threads:
         thread.join()
@@ -170,7 +174,6 @@ def saveImg(imgTitlePath, imgUrl, sema):
             time.sleep(0.03)
             file.write(img)
     sema.release()
-
 
 
 def getDownloadPageInfo(typeUrl):
@@ -212,11 +215,10 @@ def askUrl(url):
     :return: 网页内容 <class 'str'>
     '''
     header = {
-        "Referer": "https://www.mzitu.com/",
+        "Referer": "https://app.mmzztt.com",
         "User-Agent": "Mozilla/5.0"
     }
-    http = urllib3.ProxyManager("http://127.0.0.1:1080")
-    # http = urllib3.PoolManager()
+    http = urllib3.PoolManager()
     response = http.request('GET', url=url, headers=header).data
     return response
 
