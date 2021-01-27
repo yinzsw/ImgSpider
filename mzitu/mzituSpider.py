@@ -131,8 +131,6 @@ def getImgUrls(info):
                 imgUrl = re.sub("imgpc", "imgapp", imgUrl)
             imgUrls.append(imgUrl)
         print("%s张" % imgNum, end=" ")
-    print(imgUrls)
-    exit()
     return imgUrls
 
 
